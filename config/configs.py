@@ -25,9 +25,9 @@ class Config(DefaultConfig):
     def __init__(self):
         super(Config, self).__init__()
         self.CFG_NAME = 'baseline'
-        self.DATA_DIR = '/nfs/public/datasets/person_reid/Market-1501-v15.09.15'
+        self.DATA_DIR =  "/home/lzy/lzy/data/DukeMTMC-reID" #'/nfs/public/datasets/person_reid/Market-1501-v15.09.15'
         self.PRETRAIN_CHOICE = 'imagenet'
-        self.PRETRAIN_PATH = '/nfs/public/pretrained_models/resnet50-19c8e357.pth'
+        self.PRETRAIN_PATH = '/home/lzy/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth'#'/nfs/public/pretrained_models/resnet50-19c8e357.pth'
 
         self.LOSS_TYPE = 'triplet+softmax+center'
         self.TEST_WEIGHT = './output/resnet50_185.pth'

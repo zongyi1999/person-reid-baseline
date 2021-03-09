@@ -40,6 +40,7 @@ def do_train(cfg,
 
     evaluator = R1_mAP(num_query, max_rank=50, feat_norm=cfg.FEAT_NORM)
     # train
+    best_mAP = 0
     for epoch in range(1, epochs + 1):
         start_time = time.time()
         loss_meter.reset()
@@ -80,8 +81,8 @@ def do_train(cfg,
         if not os.path.exists(cfg.OUTPUT_DIR):
             os.mkdir(cfg.OUTPUT_DIR)
 
-        if epoch % checkpoint_period == 0:
-            torch.save(model.state_dict(), os.path.join(cfg.OUTPUT_DIR, cfg.MODEL_NAME + '_{}.pth'.format(epoch)))
+        # if epoch % checkpoint_period == 0:
+        #     torch.save(model.state_dict(), os.path.join(cfg.OUTPUT_DIR, cfg.MODEL_NAME + '_{}.pth'.format(epoch)))
 
         if epoch % eval_period == 0:
             model.eval()
@@ -96,6 +97,9 @@ def do_train(cfg,
             logger.info("mAP: {:.1%}".format(mAP))
             for r in [1, 5, 10]:
                 logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+            if mAP>best_mAP:
+                torch.save(model.state_dict(), os.path.join(cfg.OUTPUT_DIR, cfg.MODEL_NAME + '_best.pth'))
+
 
 
 def do_inference(cfg,

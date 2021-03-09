@@ -7,7 +7,7 @@ from .Market1501 import Market1501
 from .bases import ImageDataset
 from .preprocessing import RandomErasing
 from .sampler import RandomIdentitySampler
-
+from .dukemtmc import DukeMTMC
 
 def train_collate_fn(batch):
     """
@@ -45,7 +45,8 @@ def make_dataloader(cfg):
     ])
 
     num_workers = cfg.DATALOADER_NUM_WORKERS
-    dataset = Market1501(data_dir=cfg.DATA_DIR, verbose=True)
+    # dataset = Market1501(data_dir=cfg.DATA_DIR, verbose=True)
+    dataset = DukeMTMC(data_dir=cfg.DATA_DIR, verbose=True)
     num_classes = dataset.num_train_pids
     train_set = ImageDataset(dataset.train, train_transforms)
 
