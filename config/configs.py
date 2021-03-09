@@ -28,7 +28,7 @@ class Config(DefaultConfig):
         self.DATA_DIR =  "/home/lzy/lzy/data/DukeMTMC-reID" #'/nfs/public/datasets/person_reid/Market-1501-v15.09.15'
         self.PRETRAIN_CHOICE = 'imagenet'
         self.PRETRAIN_PATH = '/home/lzy/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth'#'/nfs/public/pretrained_models/resnet50-19c8e357.pth'
-
+        self.SOURCE_PRETRAIN_PATH = './output/resnet50_best.pth'
         self.LOSS_TYPE = 'triplet+softmax+center'
         self.TEST_WEIGHT = './output/resnet50_185.pth'
         self.FLIP_FEATS = 'off'

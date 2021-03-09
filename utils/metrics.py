@@ -1,7 +1,22 @@
 import torch
 import numpy as np
-
+from collections import OrderedDict
 from utils.reranking import re_ranking
+
+def extract_features(model, target_loader):
+    model.eval()
+    features = OrderedDict()
+    labels = OrderedDict()
+    with torch.no_grad():
+        # for i, (img, pid, camid, img_path)in enumerate(target_loader):#(img_path, pid, camid))
+        for n_iter, (imgs, pids, camids, imgpaths) in enumerate(target_loader):
+            feats = model(imgs)
+            for (imgpath, output, pid) in zip(imgpaths, feats, pids):
+                features[imgpath] = output
+                labels[imgpath] = pid
+    return features, labels
+    # feats = torch.nn.functional.normalize(feats, dim=1, p=2)  # along channel
+    # pass
 
 
 def euclidean_distance(qf, gf):
