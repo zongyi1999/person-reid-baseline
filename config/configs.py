@@ -25,11 +25,11 @@ class Config(DefaultConfig):
     def __init__(self):
         super(Config, self).__init__()
         self.CFG_NAME = 'baseline'
-        self.DATA_DIR =  "/home/lzy/lzy/data/DukeMTMC-reID" #'/nfs/public/datasets/person_reid/Market-1501-v15.09.15'
+        self.DATA_DIR = "E:\\00_Doctor\\00_project\\00_person_reid\\dataset\\Market-1501-v15.09.15" #"/home/lzy/lzy/data/DukeMTMC-reID" #'/nfs/public/datasets/person_reid/Market-1501-v15.09.15'
         self.PRETRAIN_CHOICE = 'imagenet'
-        self.PRETRAIN_PATH = '/home/lzy/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth'#'/nfs/public/pretrained_models/resnet50-19c8e357.pth'
+        self.PRETRAIN_PATH = "C:\\Users\\lenovo\\.cache\\torch\\checkpoints\\resnet50-19c8e357.pth"#'/home/lzy/.cache/torch/hub/checkpoints/resnet50-19c8e357.pth'#'/nfs/public/pretrained_models/resnet50-19c8e357.pth'
         self.SOURCE_PRETRAIN_PATH = './output/resnet50_best.pth'
-        self.LOSS_TYPE = 'triplet+softmax+center'
+        self.LOSS_TYPE = 'triplet+softmax'#'triplet+softmax+center'
         self.TEST_WEIGHT = './output/resnet50_185.pth'
         self.FLIP_FEATS = 'off'
         self.HARD_FACTOR = 0.2

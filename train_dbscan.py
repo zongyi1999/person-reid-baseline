@@ -8,7 +8,7 @@ from model import make_model
 from solver import make_optimizer, WarmupMultiStepLR
 from loss import make_loss
 from processor import do_train_dbscan
-from datasets import Market1501
+from datasets.Market1501 import Market1501
 if __name__ == '__main__':
     cfg = Config()
     if not os.path.exists(cfg.LOG_DIR):
@@ -22,23 +22,19 @@ if __name__ == '__main__':
     dataset = Market1501(cfg.DATA_DIR)
     train_set = dataset.train  #dataset = [(img_path, pid, camid),(),()....]
     _, val_loader, num_query, num_classes = make_dataloader(cfg)
-    model = make_model(cfg, num_class=num_classes)
+    model = make_model(cfg, num_class=len(train_set))
 
     loss_func, center_criterion = make_loss(cfg, num_classes=num_classes)
-
-    optimizer, optimizer_center = make_optimizer(cfg, model, center_criterion)
+    optimizer= make_optimizer(cfg, model)
     scheduler = WarmupMultiStepLR(optimizer, cfg.STEPS, cfg.GAMMA,
                                   cfg.WARMUP_FACTOR,
                                   cfg.WARMUP_EPOCHS, cfg.WARMUP_METHOD)
-
     do_train_dbscan(
         cfg,
         model,
-        center_criterion,
         train_set,
         val_loader,
         optimizer,
-        optimizer_center,
         scheduler,  # modify for using self trained model
         loss_func,
         num_query

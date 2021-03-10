@@ -1,9 +1,11 @@
+import collections
 import logging
 import numpy as np
 import os
 import time
 import torch
 import torch.nn as nn
+from sklearn.cluster import DBSCAN
 from torch.utils.data import DataLoader
 
 from datasets.bases import ImageDataset
@@ -15,6 +17,8 @@ from datasets.sampler import RandomIdentitySampler
 from datasets.make_dataloader import train_collate_fn
 from utils.metrics import extract_features
 from torch.nn import Parameter
+from utils.reranking import compute_jaccard_dist
+import torch.nn.functional as F
 def make_cluster_dataloader(cfg, target_set):
     train_transforms = T.Compose([
         T.Resize(cfg.INPUT_SIZE),
@@ -40,7 +44,7 @@ def make_cluster_dataloader(cfg, target_set):
         train_loader = DataLoader(train_set,
                                   batch_size=cfg.BATCH_SIZE,
                                   num_workers=num_workers,
-                                  sampler=RandomIdentitySampler(train_set, cfg.BATCH_SIZE, cfg.NUM_IMG_PER_ID)#,
+                                  sampler=RandomIdentitySampler(target_set, cfg.BATCH_SIZE, cfg.NUM_IMG_PER_ID)#,
                                   #collate_fn=train_collate_fn  # customized batch sampler
                                   )
     elif cfg.SAMPLER == 'softmax':
@@ -223,11 +227,9 @@ def copy_state_dict(state_dict, model, strip=None):
 
 def do_train_dbscan(cfg,
              model,
-             center_criterion,
              target_dataset,
              val_loader,
              optimizer,
-             optimizer_center,
              scheduler,
              loss_fn,
              num_query):
@@ -240,8 +242,8 @@ def do_train_dbscan(cfg,
 
     logger = logging.getLogger('{}.train'.format(cfg.PROJECT_NAME))
     logger.info('start training')
-    checkpoint = torch.load(cfg., map_location=torch.device('cpu'))
-    copy_state_dict(initial_weights['state_dict'], model)
+    checkpoint = torch.load(cfg.SOURCE_PRETRAIN_PATH, map_location=torch.device('cpu'))
+    copy_state_dict(checkpoint, model)
 
     if device:
         if torch.cuda.device_count() > 1:
@@ -256,7 +258,7 @@ def do_train_dbscan(cfg,
     # train
     best_mAP = 0
     target_cluster_dataloader = make_cluster_dataloader(cfg, target_dataset)
-    for epoch in range(1, epochs + 1):
+    for epoch in range(0, epochs):
         start_time = time.time()
         loss_meter.reset()
         acc_meter.reset()
@@ -264,30 +266,74 @@ def do_train_dbscan(cfg,
         scheduler.step()
         dict_f, _= extract_features(model, target_cluster_dataloader)
         feature_list = torch.stack(list(dict_f.values()))
-        # rerank_dist = compute_jaccard_dist(feature_list, use_gpu=args.rr_gpu).numpy()
+        print(feature_list.shape)
+        rerank_dist = compute_jaccard_dist(feature_list, use_gpu=False).numpy()
+        print(rerank_dist.shape)
+        if (epoch==0):
+            # DBSCAN cluster
+            tri_mat = np.triu(rerank_dist, 1) # tri_mat.dim=2
+            tri_mat = tri_mat[np.nonzero(tri_mat)] # tri_mat.dim=1
+            tri_mat = np.sort(tri_mat,axis=None)
+            rho = 1.6e-3
+            top_num = np.round(rho*tri_mat.size).astype(int)
+            eps = tri_mat[:top_num].mean()
+            print('eps for cluster: {:.3f}'.format(eps))
+            cluster = DBSCAN(eps=eps, min_samples=4, metric='precomputed', n_jobs=-1)
+        print('Clustering and labeling...')
+        labels = cluster.fit_predict(rerank_dist)
+        num_ids = len(set(labels)) - (1 if -1 in labels else 0)
+        print(np.sum((labels==-1)), "images not in the clusters")
+        # cfg.num_clusters = num_ids
+        print('\n Clustered into {} classes \n'.format(num_ids))
 
+        new_dataset = []
+        cluster_centers = collections.defaultdict(list)
+        for i, ((fname, _, cid), label) in enumerate(zip(target_dataset, labels)):
+            if label==-1: continue
+            new_dataset.append((fname,label,cid))
+            cluster_centers[label].append(feature_list[i])
 
-
-
-
-
-
+        cluster_centers = [torch.stack(cluster_centers[idx]).mean(0) for idx in sorted(cluster_centers.keys())]
+        cluster_centers = torch.stack(cluster_centers)
+        model.classifier.weight.data[:num_ids].copy_(F.normalize(cluster_centers, dim=1).float().cuda())
+        train_loader_target = make_cluster_dataloader(cfg, new_dataset)#get_train_loader(dataset_target, args.height, args.width,args.batch_size, args.workers, args.num_instances, iters,                     trainset=new_dataset)
         model.train()
-        for n_iter, (img, vid) in enumerate(train_loader):
+        # # # Optimizer
+        # # params = []
+        # # for key, value in model.named_parameters():
+        # #     if not value.requires_grad:
+        # #         continue
+        # #     params += [{"params": [value], "lr": args.lr, "weight_decay": args.weight_decay}]
+        # # optimizer = torch.optim.Adam(params)
+        #
+        # # Trainer
+        # trainer = ClusterBaseTrainer(model, num_cluster=args.num_clusters)
+        #
+        # train_loader_target.new_epoch()
+        #
+        # trainer.train(epoch, train_loader_target, optimizer,
+        #               print_freq=args.print_freq, train_iters=len(train_loader_target))
+        #
+        # def save_model(model, is_best, best_mAP):
+        #     save_checkpoint({
+        #         'state_dict': model.state_dict(),
+        #         'epoch': epoch + 1,
+        #         'best_mAP': best_mAP,
+        #     }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
+        # model.train()
+        # for n_iter, (img, vid) in enumerate(target_cluster_dataloader):
+        for iter, (img, pid, camid, img_path) in enumerate(train_loader_target):
             optimizer.zero_grad()
-            optimizer_center.zero_grad()
             img = img.to(device)
-            target = vid.to(device)
-
+            target = pid.to(device)
             score, feat = model(img, target)
             loss = loss_fn(score, feat, target)
-
             loss.backward()
             optimizer.step()
-            if 'center' in cfg.LOSS_TYPE:
-                for param in center_criterion.parameters():
-                    param.grad.data *= (1. / cfg.CENTER_LOSS_WEIGHT)
-                optimizer_center.step()
+            # if 'center' in cfg.LOSS_TYPE:
+            #     for param in center_criterion.parameters():
+            #         param.grad.data *= (1. / cfg.CENTER_LOSS_WEIGHT)
+            #     optimizer_center.step()
 
             acc = (score.max(1)[1] == target).float().mean()
             loss_meter.update(loss.item(), img.shape[0])
@@ -295,13 +341,13 @@ def do_train_dbscan(cfg,
 
             if (n_iter + 1) % log_period == 0:
                 logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}"
-                            .format(epoch, (n_iter + 1), len(train_loader),
+                            .format(epoch, (n_iter + 1), len(target_cluster_dataloader),
                                     loss_meter.avg, acc_meter.avg, scheduler.get_lr()[0]))
 
         end_time = time.time()
         time_per_batch = (end_time - start_time) / (n_iter + 1)
         logger.info("Epoch {} done. Time per batch: {:.3f}[s] Speed: {:.1f}[samples/s]"
-                    .format(epoch, time_per_batch, train_loader.batch_size / time_per_batch))
+                    .format(epoch, time_per_batch, target_cluster_dataloader.batch_size / time_per_batch))
 
         if not os.path.exists(cfg.OUTPUT_DIR):
             os.mkdir(cfg.OUTPUT_DIR)

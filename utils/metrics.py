@@ -3,14 +3,16 @@ import numpy as np
 from collections import OrderedDict
 from utils.reranking import re_ranking
 
-def extract_features(model, target_loader):
+def extract_features(model, target_loader, device="cuda"):
     model.eval()
     features = OrderedDict()
     labels = OrderedDict()
     with torch.no_grad():
         # for i, (img, pid, camid, img_path)in enumerate(target_loader):#(img_path, pid, camid))
         for n_iter, (imgs, pids, camids, imgpaths) in enumerate(target_loader):
+            imgs = imgs.to(device)
             feats = model(imgs)
+            feats = feats.cpu()
             for (imgpath, output, pid) in zip(imgpaths, feats, pids):
                 features[imgpath] = output
                 labels[imgpath] = pid
